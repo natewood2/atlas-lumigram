@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Image, TouchableWithoutFeedback, Alert, Dimensions, SafeAreaView } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, Image, TouchableWithoutFeedback, Alert, Dimensions, SafeAreaView, ActivityIndicator } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { favoritesFeed } from '../../placeholder';
+import { firestore, auth } from '../../firebaseConfig';
+import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 
 const { width } = Dimensions.get('window');
 
-interface FeedItem {
+interface FavoriteItem {
   id: string;
   image: string;
   caption: string;
@@ -27,7 +29,7 @@ class DoubleTapDetector {
   }
 }
 
-const DogCard = ({ item }: { item: FeedItem }) => {
+const DogCard = ({ item }: { item: FavoriteItem }) => {
   const [showCaption, setShowCaption] = useState(false);
   const doubleTapDetector = new DoubleTapDetector();
 
@@ -71,16 +73,90 @@ const DogCard = ({ item }: { item: FeedItem }) => {
 };
 
 export default function FavoritesScreen() {
+  const [favorites, setFavorites] = useState<FavoriteItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchFavorites = async () => {
+      try {
+        const currentUser = auth.currentUser;
+        if (!currentUser) {
+          setFavorites(favoritesFeed);
+          return;
+        }
+
+        const userFavoritesRef = collection(firestore, "users", currentUser.uid, "favorites");
+        const querySnapshot = await getDocs(userFavoritesRef);
+
+        if (querySnapshot.empty) {
+
+          setFavorites(favoritesFeed);
+        } else {
+          const favoritePosts: FavoriteItem[] = [];
+
+          for (const document of querySnapshot.docs) {
+            const favoriteData = document.data();
+            const postId = favoriteData.postId;
+
+            try {
+              const postDoc = await getDoc(doc(firestore, "posts", postId));
+              
+              if (postDoc.exists()) {
+                const postData = postDoc.data();
+                favoritePosts.push({
+                  id: postDoc.id,
+                  image: postData.imageUrl || postData.image,
+                  caption: postData.caption || "",
+                  createdBy: postData.userEmail || postData.createdBy || "Anonymous"
+                });
+              }
+            } catch (error) {
+              console.error("Error fetching post:", error);
+            }
+          }
+          
+          if (favoritePosts.length > 0) {
+            setFavorites(favoritePosts);
+          } else {
+            setFavorites(favoritesFeed);
+          }
+        }
+      } catch (error) {
+        console.error(error);
+        setFavorites(favoritesFeed);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchFavorites();
+  }, []);
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#4BEBC0" />
+      </View>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
-      <FlashList
-        data={favoritesFeed}
-        renderItem={({ item }) => <DogCard item={item} />}
-        estimatedItemSize={400}
-        keyExtractor={(item) => item.id}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      />
+      {favorites.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyText}>No favorites yet</Text>
+          <Text style={styles.emptySubtext}>Maybe double tap?</Text>
+        </View>
+      ) : (
+        <FlashList
+          data={favorites}
+          renderItem={({ item }) => <DogCard item={item} />}
+          estimatedItemSize={400}
+          keyExtractor={(item) => item.id}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -89,6 +165,25 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: 'white',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: 'gray',
   },
   title: {
     fontSize: 24,

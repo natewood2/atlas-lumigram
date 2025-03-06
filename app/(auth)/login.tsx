@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, KeyboardAvoidingView, Platform, Alert, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
+import { useAuth } from '../../hooks/useAuth';
 
 interface Login {
   email: string;
@@ -12,15 +13,43 @@ export default function LoginScreen() {
     email: '',
     password: ''
   });
+  const [isLoading, setIsLoading] = useState(false);
+  const { login } = useAuth();
 
-  const handleLogin = () => {
-    router.replace('/(tabs)/home');
+  const handleLogin = async () => {
+    if (!form.email || !form.password) {
+      Alert.alert('Error', 'Please fill in all fields');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      await login(form.email, form.password);
+      router.replace('/(tabs)/home');
+    } catch (error: any) {
+      let errorMessage = 'Login failed. Please try again.';
+      
+      if (error.code === 'auth/invalid-email') {
+        errorMessage = 'Invalid email address format.';
+      } else if (error.code === 'auth/user-not-found') {
+        errorMessage = 'No account found with this email.';
+      } else if (error.code === 'auth/wrong-password') {
+        errorMessage = 'Incorrect password.';
+      } else if (error.code === 'auth/too-many-requests') {
+        errorMessage = 'Too many failed login attempts. Please try again later.';
+      }
+      
+      Alert.alert('Error', errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView 
         style={styles.keyboardAvoid}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <View style={styles.logoContainer}>
           <Text style={styles.atlas}>Atlas</Text>
@@ -48,13 +77,22 @@ export default function LoginScreen() {
             onChangeText={(text) => setForm({...form, password: text})}
           />
           
-          <TouchableOpacity style={styles.button} onPress={handleLogin}>
-            <Text style={styles.buttonText}>Sign in</Text>
+          <TouchableOpacity 
+            style={styles.button} 
+            onPress={handleLogin}
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <ActivityIndicator color="white" />
+            ) : (
+              <Text style={styles.buttonText}>Sign in</Text>
+            )}
           </TouchableOpacity>
           
           <TouchableOpacity 
             style={styles.signupContainer} 
             onPress={() => router.push('/(auth)/register')}
+            disabled={isLoading}
           >
             <Text style={styles.link}>Create a new account</Text>
           </TouchableOpacity>

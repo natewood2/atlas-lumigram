@@ -1,24 +1,46 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, KeyboardAvoidingView, Platform, Alert, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
+import { useAuth } from '../../hooks/useAuth';
 
 interface Register {
-  fullName: string;
-  username: string;
   email: string;
   password: string;
 }
 
 export default function RegisterScreen() {
   const [form, setForm] = useState<Register>({
-    fullName: '',
-    username: '',
     email: '',
     password: ''
-  });
+  })
+  const [isLoading, setIsLoading] = useState(false)
+  const { register } = useAuth()
 
-  const handleRegister = () => {
-    router.replace('/(tabs)/home');
+  const handleRegister = async () => {
+    if (!form.email || !form.password) {
+      Alert.alert('Error', 'Fill in all fields');
+      return;
+    }
+
+    try {
+      setIsLoading(true)
+      await register(form.email, form.password)
+      router.replace('/(tabs)/home')
+    } catch (error: any) {
+      let errorMessage = 'Registration failed. Please try again.'
+
+      if (error.code === 'auth/email-already-in-use') {
+        errorMessage = 'Already use this email address.'
+      } else if (error.code === 'auth/invalid-email') {
+        errorMessage = 'Nope, not a valid email address.'
+      } else if (error.code === 'auth/weak-password') {
+        errorMessage = 'Password is so weak.'
+      }
+
+      Alert.alert('Error', errorMessage)
+    } finally {
+      setIsLoading(false)
+    }
   };
 
   return (
@@ -34,7 +56,6 @@ export default function RegisterScreen() {
         </View>
         
         <View style={styles.formContainer}>
-          
           <TextInput
             style={styles.input}
             placeholder="Email"
@@ -54,15 +75,24 @@ export default function RegisterScreen() {
             onChangeText={(text) => setForm({...form, password: text})}
           />
           
-          <TouchableOpacity style={styles.button} onPress={handleRegister}>
-            <Text style={styles.buttonText}>Create Account</Text>
+          <TouchableOpacity 
+            style={styles.button} 
+            onPress={handleRegister}
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <ActivityIndicator color="white" />
+            ) : (
+              <Text style={styles.buttonText}>Create Account</Text>
+            )}
           </TouchableOpacity>
           
           <TouchableOpacity 
             style={styles.signupContainer} 
             onPress={() => router.push('/(auth)/login')}
+            disabled={isLoading}
           >
-            <Text style={styles.link}>Login to existing acount</Text>
+            <Text style={styles.link}>Login to existing account</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>

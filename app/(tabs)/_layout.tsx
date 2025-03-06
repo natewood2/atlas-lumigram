@@ -1,12 +1,20 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
-import { TouchableOpacity, Text } from 'react-native';
+import { TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { useAuth } from '../../hooks/useAuth';
 
 export default function TabsLayout() {
-  const handleLogout = () => {
-    router.replace('/(auth)/login');
+  const { logout } = useAuth();
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      router.replace('/(auth)/login');
+    } catch (error) {
+      Alert.alert('Error', 'Cant logout.');
+    }
   };
 
   return (
